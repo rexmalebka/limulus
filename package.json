@@ -1,0 +1,34 @@
+{
+	"name": "limulus",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"build": "npx webpack && npx tsc -p server/tsconfig.json ",
+		"server": "npx electron dist/server/index.js"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"commander": "^9.4.1",
+		"express": "^4.18.2",
+		"socket.io": "^4.5.4",
+		"socket.io-client": "^4.5.4",
+		"winston": "^3.8.2"
+	},
+	"devDependencies": {
+		"@commander-js/extra-typings": "^9.4.1",
+		"@types/express": "^4.17.14",
+		"@types/react": "^18.0.25",
+		"@types/react-dom": "^18.0.9",
+		"electron": "^22.0.0",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"ts-loader": "^9.4.2",
+		"typescript": "^4.9.3",
+		"webpack": "^5.75.0",
+		"webpack-cli": "^5.0.0"
+	}
+}
