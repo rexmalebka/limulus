@@ -3,7 +3,7 @@ const path = require('path');
 
 const config = {
 	entry: [
-		'./client/index.ts'
+		'./client/index.tsx'
 	],
 	output: {
 		path: path.resolve(__dirname, 'static/js'),
@@ -20,6 +20,10 @@ const config = {
 				test: /\.ts(x)?$/,
 				loader: 'ts-loader',
 				exclude: /node_modules/
+			},
+			{
+				test: /\.css$/i,
+				use: ["style-loader", "css-loader"],
 			}
 		]
 	},

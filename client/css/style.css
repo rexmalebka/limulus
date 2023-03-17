@@ -1,0 +1,48 @@
+body{
+	overflow: hidden;
+	margin: 0px;
+	padding: 0px;
+	font-family: "Courier New";
+	color:#ffffff;
+	text-shadow: 
+	0 0 15px #FFFFFF;
+
+}
+
+#ui{
+	display: flex;
+	flex-direction: column;
+	position: absolute;
+	margin: 2em;
+	padding: 1em;
+	font-size:1.5em;
+	align-items:center;
+	max-width:30%;
+}
+
+#label{
+	text-transform: capitalize;
+	font-style: italic;
+	font-weight: bolder;
+	padding:1em;
+}
+
+#props{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+#props div:nth-of-type(odd){
+	flex: 60%;
+}
+
+#props div:nth-of-type(even){
+	flex: 40%;
+	text-align:right;
+}
+
+
+
+

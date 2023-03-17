@@ -8,4 +8,6 @@ _Limulus, organismos digitales en el antropoceno_ es un proyecto audiovisual que
 
 > npm run build
 
+## implementación
 
+> npm run server
