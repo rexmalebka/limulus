@@ -1,25 +1,30 @@
 import * as THREE from 'three'
+import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
+import type {callback_species_args} from '../visuals/visuals'
 
-interface args{
-	scene: THREE.Scene;
-	limulus: THREE.Group
-}
 
-let miniatus = function({scene, limulus} : args): THREE.Group{
-	limulus.getObjectByName('prosoma')!.scale.x =2
+let miniatus = function(loader: GLTFLoader, scene: THREE.Scene ){
+	return new Promise<callback_species_args>(function(res, rej){
 
-	limulus.traverse((part)=>{
-		if(part.type == 'Mesh'){
-			(part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.color.setHex(0xff4229)
-		}
+		loader.load('models/miniatus.glb', function(glb){
+			const limulus = glb.scene
+
+			limulus.getObjectByName('exo')!.children.map( (part)=>{
+				;(part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.transparent = true
+				;(part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.opacity = 0.4
+			})
+
+			res({
+				limulus:limulus, 
+				scene:scene,
+				morph: (t:number)=>	{
+					console.debug(scene, t)
+				}			
+			})
+		})
 
 	})
-	limulus.getObjectByName('pd1')!.scale.y=2
-	limulus.getObjectByName('pi1')!.scale.y=2
 
-	limulus.getObjectByName('pd4')!.scale.y=2.4
-	limulus.getObjectByName('pi4')!.scale.y=2.4
-	return limulus
 }
 
 export default miniatus
