@@ -1,5 +1,6 @@
 const webpack = require('webpack');
 const path = require('path');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 const config = {
 	entry: [
@@ -27,6 +28,14 @@ const config = {
 			}
 		]
 	},
+	plugins:[
+		new CopyWebpackPlugin({
+			patterns:[
+				
+				path.resolve(__dirname, "node_modules/three/examples/js/libs/draco/"),
+			]
+		})
+	],
 	resolve: {
 		extensions: [
 			'.tsx',

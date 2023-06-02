@@ -7,12 +7,10 @@ html {
 body {
 	overflow: hidden;
 	font-family: "Courier New";
+	background-color: black;
 	color: #ffffff;
 	text-shadow:
-		0 0 15px #FFFFFF;
-/*	filter: blur(8px);
-	-webkit-filter: blur(8px);*/
-  
+		0 0 15px #FFFFFF;  
 }
 
 #credits {
@@ -27,6 +25,7 @@ body {
 	bottom: 0;
 	padding: 1em;
 	font-size: 1.2em;
+	border: 1px solid white;
 }
 
 #bio {
@@ -46,6 +45,7 @@ body {
 	font-size: 1.5em;
 	align-items: center;
 	max-width: 30%;
+	border: 1px solid white;
 }
 
 #label {

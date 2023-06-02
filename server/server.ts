@@ -46,7 +46,8 @@ function run_server(ip: string, port: number) {
 		io.on('connection', (socket) => {
 			socket.on('t', function (t: number, callback) {
 				logger.info(`seed received, got ${t}`)
-				const params = (data[Math.floor(t * data.length)])
+				const params = (data[Math.floor(t * data.length)].slice(1))
+				
 				logger.info(`hyperparams calculated ${params}`)
 
 				callback(params)
