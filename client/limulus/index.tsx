@@ -80,16 +80,16 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 			callback: prasinus
 		},*/
 		{
-			name:'Chaetopterus',
+			name: 'Chaetopterus',
 			callback: chaetopterus
 		}
 	]
 
-	React.useEffect(()=>{
-		if(!hyperparams) return
-		if(!seed) return
-		if(!scene) return
-		if(!canvas_container) return
+	React.useEffect(() => {
+		if (!hyperparams) return
+		if (!seed) return
+		if (!scene) return
+		if (!canvas_container) return
 
 		set_limulus_species(() => {
 			const ls = limulus_species_prototypes[
@@ -104,17 +104,64 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 
 			ls.callback(gltf_loader, scene, hyperparams)
 				.then((args: callback_species_args) => {
+
+					// wait till limulus is loaded to start countdown
+					const now = new Date()
+					const now_sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+
+					set_ttl(() => {
+						const t = Math.floor(rand.current.next() * 20)
+
+						if (localStorage.getItem(seed) == null) {
+							localStorage.setItem(seed, `${now_sec}`)
+							set_life_countdown(() => t)
+
+
+						} else {
+							const start = JSON.parse(localStorage.getItem(seed) || `${now_sec}`)
+
+							if (now_sec - start >= t) {
+								// limulus is already dead, redirect to create another
+
+								setTimeout(function () {
+									localStorage.removeItem(seed)
+									clearInterval(life_countdown_id.current)
+									navigate('/')
+								}, 2000)
+								return t
+							} else {
+								set_life_countdown(() => t - (now_sec - start))
+							}
+						}
+
+						life_countdown_id.current = setInterval(function () {
+							set_life_countdown((l) => {
+								if (l <= 0) {
+									localStorage.removeItem(seed)
+									clearInterval(life_countdown_id.current)
+									setTimeout(function () {
+										navigate('/')
+									}, 2000)
+									return 0
+								}
+								return l - 1
+							})
+						}, 1000)
+
+						return t
+					})
+					/// add model to scene uwu
 					args.limulus.name = 'limulus'
 
 					move_legs(args)
 
 					gltf_loader.load('models/ewaste.glb', function (glb) {
 						const waste_scene = glb.scene
-	
-						for(let i=0;i<6;i++){
-							const ewaste = waste_scene.getObjectByName(`ewaste-${i+1}`)!
-	
-							if(rand.current.next() >= 0.5){
+
+						for (let i = 0; i < 6; i++) {
+							const ewaste = waste_scene.getObjectByName(`ewaste-${i + 1}`)!
+
+							if (rand.current.next() >= 0.5) {
 								ewaste.visible = false
 							}
 						}
@@ -126,64 +173,32 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 			return ls
 		})
 
-		const now = new Date()
-		const now_sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
-
-		set_ttl(() => {
-			const t = Math.floor(rand.current.next() * 20)
-
-			if (localStorage.getItem(seed) == null) {
-				localStorage.setItem(seed, `${now_sec}`)
-				set_life_countdown(() => t)
-
-
-			} else {
-				const start = JSON.parse(localStorage.getItem(seed) || `${now_sec}`)
-
-				if (now_sec - start >= t) {
-					// limulus is already dead, redirect to create another
-
-					setTimeout(function () {
-						localStorage.removeItem(seed)
-						clearInterval(life_countdown_id.current)
-						navigate('/')
-					}, 2000)
-					return t
-				} else {
-					set_life_countdown(() => t - (now_sec - start))
-				}
-			}
-
-			life_countdown_id.current = setInterval(function () {
-				set_life_countdown((l) => {
-					if (l <= 0) {
-						localStorage.removeItem(seed)
-						clearInterval(life_countdown_id.current)
-						setTimeout(function () {
-							navigate('/')
-						}, 2000)
-						return 0
-					}
-					return l - 1
-				})
-			}, 1000)
-
-			return t
-		})
-
-		return ()=>{
+		return () => {
 			if (scene) {
 				console.debug("removing child", scene)
-				scene.remove(scene.getObjectByName('limulus')!)
+				const limulus = scene.getObjectByName('limulus')! as THREE.Group
+				limulus.traverse((obj) => {
+					if ((obj as THREE.Mesh).isMesh) {
+						// removes material
+
+						((obj as THREE.Mesh).material as THREE.MeshStandardMaterial).map?.dispose();
+						((obj as THREE.Mesh).material as THREE.MeshStandardMaterial).dispose();
+						((obj as THREE.Mesh).geometry as THREE.BufferGeometry).dispose();
+
+						scene.remove(obj)
+					}
+
+				})
+				scene.remove(limulus)
 
 			}
 
-			if(canvas_container){
+			if (canvas_container) {
 				canvas_container.current.style.filter = ''
 			}
 		}
 
-	},[hyperparams, scene,canvas_container,seed])
+	}, [hyperparams, scene, canvas_container, seed])
 
 	React.useEffect(() => {
 
@@ -196,7 +211,7 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 			socket.emit('t', Math.random(), function (params: number[]) {
 
 				set_hyperparams(params)
-				
+
 				info_log(JSON.stringify(params))
 			})
 		}
@@ -219,11 +234,11 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 		if (!canvas_container || life_countdown == 0) return
 
 
-		if(canvas_container.current.style.filter == ''){
+		if (canvas_container.current.style.filter == '') {
 			console.debug(life_countdown)
-			const miau = new TWEEN.Tween({blur:50})
-			.easing(TWEEN.Easing.Exponential.Out)
-				.to({ blur: 0 }, life_countdown*1000)
+			const miau = new TWEEN.Tween({ blur: 50 })
+				.easing(TWEEN.Easing.Exponential.Out)
+				.to({ blur: 0 }, life_countdown * 1000)
 				.onUpdate(function (data) {
 					canvas_container.current.style.filter = `blur(${Math.floor(data.blur)}px)`
 				})

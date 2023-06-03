@@ -6,6 +6,11 @@ import * as THREE from 'three';
 import * as TWEEN from "@tweenjs/tween.js"
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+
+
 import Limulus from './limulus/index';
 
 const Routing: React.FC = () => {
@@ -33,6 +38,7 @@ const Routing: React.FC = () => {
 
             // generate canvas scene
             const scene_props = generate_scene()
+
 
             const animate_wrapper = () => {
                 animate_id.current = requestAnimationFrame(animate_wrapper)
@@ -75,12 +81,29 @@ const Routing: React.FC = () => {
             <div id="logs">
                 <pre>{logs}</pre>
             </div>
-            <div ref={canvas_container}></div>
+            <div ref={canvas_container} id="three"></div>
         </>
     )
 }
 
 export default Routing
+
+
+function add_postprocessing(scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) {
+    const renderScene = new RenderPass(scene, camera);
+
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        2, 0.4, 0.85
+    )
+
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(renderScene);
+    composer.addPass(bloomPass);
+
+    return composer
+}
 
 function add_lights(scene: THREE.Scene) {
     // ambient lights
@@ -118,7 +141,7 @@ function move_camera(camera: THREE.Camera) {
         ]
     ]
 
-    
+
     let i = 0;
 
     // arriba // abajo // derecha 
@@ -127,10 +150,11 @@ function move_camera(camera: THREE.Camera) {
             rotation[i % rotation.length][0],
             rotation[i % rotation.length][1],
             rotation[i % rotation.length][2],
-            )
+        )
         i++;
-        }, 5000)
+    }, 5000)
 }
+
 
 function generate_scene() {
     const scene = new THREE.Scene()
@@ -138,10 +162,11 @@ function generate_scene() {
     const renderer = new THREE.WebGLRenderer({ alpha: true })
     const controls = new OrbitControls(camera, renderer.domElement);
 
+
     renderer.shadowMap.enabled = true
     renderer.toneMapping = THREE.ReinhardToneMapping
 
-    scene.fog = new THREE.Fog( 0xcccccc, 10, 15 );
+    scene.fog = new THREE.Fog(0xcccccc, 10, 15);
 
     camera.position.z = 5;
 
@@ -152,8 +177,8 @@ function generate_scene() {
     const size = 5;
     const divisions = 20;
 
-    const gridHelper = new THREE.GridHelper( size, divisions , 0xffffff, 0xffffff);
-    scene.add( gridHelper );
+    const gridHelper = new THREE.GridHelper(size, divisions, 0xffffff, 0xffffff);
+    scene.add(gridHelper);
 
 
     //move_camera(camera)
@@ -177,7 +202,12 @@ function generate_scene() {
         renderer.setSize(window.innerWidth, window.innerHeight);
 
     }
-
+    
+    const composer = add_postprocessing(
+        scene,
+        camera,
+        renderer
+    )
 
     function animate() {
         TWEEN.update()
@@ -190,6 +220,7 @@ function generate_scene() {
 
     add_lights(scene)
 
+    
 
     return {
         scene: scene,
