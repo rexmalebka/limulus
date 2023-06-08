@@ -10,8 +10,16 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
+import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
+
+import * as Tone from 'tone'
 
 import Limulus from './limulus/index';
+
+declare global {
+    interface Window { scene: THREE.Scene; }
+}
 
 const Routing: React.FC = () => {
     const canvas_container = React.useRef() as React.MutableRefObject<HTMLDivElement>;
@@ -20,11 +28,15 @@ const Routing: React.FC = () => {
     const [socket, set_socket] = React.useState<Socket>()
     const [scene, set_scene] = React.useState<THREE.Scene>()
 
+    const [models, set_models] = React.useState<{ [name: string]: THREE.Group }>()
+
+    const [player, set_player] = React.useState<{ player: Tone.Player, distortion: Tone.Distortion }>()
     const animate_id = React.useRef<number>(0)
     // connect to sockets
 
     React.useEffect(() => {
         if (!canvas_container) return
+        // canvas container is loaded 
 
         const s = io("ws://127.0.0.1:8000")
 
@@ -51,7 +63,32 @@ const Routing: React.FC = () => {
                 scene_props.renderer.domElement
             )
 
-            set_scene(() => scene_props.scene)
+            set_scene(() => {
+                load_models(set_models, scene_props.scene)
+                return scene_props.scene
+            })
+
+            const player = new Tone.Player('sounds/tweet.wav', function () {
+                player.playbackRate = 0.1
+                player.loop = true
+
+
+                const distortion = new Tone.Distortion(0.05).toDestination()
+
+                player
+                    .connect(distortion)
+                    .toDestination()
+
+                set_player(() => {
+                    return {
+                        player: player,
+                        distortion: distortion
+                    }
+                })
+
+                player.autostart = true
+
+            })
 
         })
 
@@ -69,6 +106,8 @@ const Routing: React.FC = () => {
                             scene={scene}
                             info_log={info_log}
                             canvas_container={canvas_container}
+                            models={models}
+                            player={player}
                         />}
                     />
                     <Route
@@ -87,6 +126,247 @@ const Routing: React.FC = () => {
 }
 
 export default Routing
+
+interface limulus_args {
+    socket: Socket | undefined
+    scene: THREE.Scene | undefined
+    info_log: React.Dispatch<React.SetStateAction<string>>
+    canvas_container: React.MutableRefObject<HTMLDivElement> | undefined
+}
+
+
+export interface callback_species_args {
+    scene: THREE.Scene
+    limulus: THREE.Group
+    morph: (t: number) => any
+
+}
+
+export interface limulus_species_prototype {
+    name: string
+    callback: (loader: GLTFLoader, scene: THREE.Scene, hyperparams: number[]) => Promise<callback_species_args>
+}
+
+
+function load_models(
+    set_models: React.Dispatch<React.SetStateAction<{ [name: string]: THREE.Group } | undefined>>,
+    scene: THREE.Scene
+) {
+    const model_names: string[] = [
+        /*
+        'pteron',
+        'chaetopterus',
+        'polyphemus',
+        "miniatus",
+        "nereis",
+        */"prasinus",
+        'ewaste',
+        /*
+        "tuberculata"*/
+    ]
+
+    const gltf_loader = new GLTFLoader();
+
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('/js/');
+    gltf_loader.setDRACOLoader(dracoLoader);
+
+
+    Promise.all<THREE.Group>(model_names.map((mod) => {
+
+        return new Promise<THREE.Group>((res, rej) => {
+            gltf_loader.load(`models/${mod}.glb`, function (glb) {
+                const limulus = glb.scene
+                limulus.name = mod
+
+                res(limulus as THREE.Group)
+            })
+        })
+    })).then((models: THREE.Group[]) => {
+
+        const ewaste = models.filter((m) => m.name == 'ewaste')[0]
+        scene.add(ewaste)
+
+        let circle_mov = new TWEEN.Tween(ewaste.rotation)
+            .to({ y: Math.PI * 2 }, 20000)
+            .repeat(Infinity)
+        circle_mov.start()
+
+
+        const models_map = new Map(
+            models
+                .filter((m) => m.name != 'ewaste')
+                .map((model): [string, THREE.Group] => {
+                    const box = new THREE.BoxHelper(model, 0xffff00);
+                    box.name = 'box'
+                    model.add(box);
+
+                    move_legs(model)
+                    scene.add(model)
+                    return [model.name, model]
+                })
+        )
+
+        set_models(() => Object.fromEntries(models_map))
+    })
+}
+
+function move_legs(limulus: THREE.Group) {
+
+    console.debug("moving legss", limulus.name)
+
+    let pos = {
+        x: limulus.position.x,
+        z: limulus.position.z
+    }
+
+    let legs = {
+        right: [
+            limulus.getObjectByName('pd1')!,
+            limulus.getObjectByName('pd2')!,
+            limulus.getObjectByName('pd3')!,
+            limulus.getObjectByName('pd4')!
+        ],
+        left: [
+            limulus.getObjectByName('pi1')!,
+            limulus.getObjectByName('pi2')!,
+            limulus.getObjectByName('pi3')!,
+            limulus.getObjectByName('pi4')!
+        ]
+    }
+
+    let circle_mov = new TWEEN.Tween(limulus.rotation)
+        .to({ y: Math.PI * 2 }, 20000)
+        .repeat(Infinity)
+    circle_mov.start()
+
+    let i = 1
+    for (let leg of legs.right) {
+
+        let leg_on = new TWEEN.Tween(leg.rotation)
+            .to({ x: 2.6 }, 1000)
+
+        let leg_back = new TWEEN.Tween(leg.rotation)
+            .to({ x: leg.rotation.x }, 1000)
+            .chain(leg_on)
+
+        // ligament 1
+
+        let lig1_on = new TWEEN.Tween(
+            leg.getObjectByName(`l1d${i}`)!.rotation
+        )
+            .to({ x: -0.5 }, 1000)
+
+        let lig1_back = new TWEEN.Tween(
+            leg.getObjectByName(`l1d${i}`)!.rotation
+        )
+            .to({ x: 0 }, 1000)
+            .chain(lig1_on)
+
+        // ligament 2
+
+
+        let lig2_on = new TWEEN.Tween(
+            leg.getObjectByName(`l2d${i}`)!.rotation
+        )
+            .to({ x: -0.7 }, 1000)
+
+        let lig2_back = new TWEEN.Tween(
+            leg.getObjectByName(`l2d${i}`)!.rotation
+        )
+            .to({ x: 0 }, 1000)
+            .chain(lig2_on)
+
+        // ligament 3
+
+        let lig3_on = new TWEEN.Tween(
+            leg.getObjectByName(`l3d${i}`)!.rotation
+        )
+            .to({ x: -0.8 }, 1000)
+
+        let lig3_back = new TWEEN.Tween(
+            leg.getObjectByName(`l3d${i}`)!.rotation
+        )
+            .to({ x: 0 }, 1000)
+            .chain(lig3_on)
+
+        leg_on.chain(leg_back).start(i * 200)
+        lig1_on.chain(lig1_back).start(100 + i * 200)
+        lig2_on.chain(lig2_back).start(500 + i * 200)
+        lig3_on.chain(lig3_back).start(500 + i * 200)
+
+        i += 1;
+    }
+
+    i = 1
+    for (let leg of legs.left) {
+
+        let leg_on = new TWEEN.Tween(leg.rotation)
+            .to({ x: -2.6 }, 1000)
+
+        let leg_back = new TWEEN.Tween(leg.rotation)
+            .to({ x: leg.rotation.x }, 1000)
+            .chain(leg_on)
+
+        // ligament 1
+
+        let lig1_on = new TWEEN.Tween(
+            leg.getObjectByName(`l1i${i}`)!.rotation
+        )
+            .to({ x: 0.5 }, 1000)
+
+        let lig1_back = new TWEEN.Tween(
+            leg.getObjectByName(`l1i${i}`)!.rotation
+        )
+            .to({ x: 0 }, 1000)
+            .chain(lig1_on)
+
+        // ligament 2
+
+        let lig2_on = new TWEEN.Tween(
+            leg.getObjectByName(`l2i${i}`)!.rotation
+        )
+            .to({ x: 0.7 }, 1000)
+
+        let lig2_back = new TWEEN.Tween(
+            leg.getObjectByName(`l2i${i}`)!.rotation
+        )
+            .to({ x: 0 }, 1000)
+            .chain(lig2_on)
+
+        // ligament 3
+
+        let lig3_on = new TWEEN.Tween(
+            leg.getObjectByName(`l3i${i}`)!.rotation
+        )
+            .to({ x: 0.8 }, 1000)
+
+        let lig3_back = new TWEEN.Tween(
+            leg.getObjectByName(`l3i${i}`)!.rotation
+        )
+            .to({ x: 0 }, 1000)
+            .chain(lig3_on)
+
+        leg_on.chain(leg_back).start(i * 200)
+        lig1_on.chain(lig1_back).start(100 + i * 200)
+        lig2_on.chain(lig2_back).start(500 + i * 200)
+        lig3_on.chain(lig3_back).start(500 + i * 200)
+
+        i += 1;
+    }
+
+    const telson = limulus.getObjectByName('telson-piv')!
+
+    let telson_on = new TWEEN.Tween(telson.rotation)
+        .to({ x: 0.3 }, 10000)
+
+    let telson_back = new TWEEN.Tween(telson.rotation)
+        .to({ x: 0 }, 8000)
+        .chain(telson_on)
+
+    telson_on.chain(telson_back).start()
+
+}
 
 
 function add_postprocessing(scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) {
@@ -155,13 +435,13 @@ function move_camera(camera: THREE.Camera) {
     }, 5000)
 }
 
-
 function generate_scene() {
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000)
     const renderer = new THREE.WebGLRenderer({ alpha: true })
     const controls = new OrbitControls(camera, renderer.domElement);
 
+    window.scene = scene
 
     renderer.shadowMap.enabled = true
     renderer.toneMapping = THREE.ReinhardToneMapping
@@ -202,7 +482,7 @@ function generate_scene() {
         renderer.setSize(window.innerWidth, window.innerHeight);
 
     }
-    
+
     const composer = add_postprocessing(
         scene,
         camera,
@@ -220,7 +500,7 @@ function generate_scene() {
 
     add_lights(scene)
 
-    
+
 
     return {
         scene: scene,

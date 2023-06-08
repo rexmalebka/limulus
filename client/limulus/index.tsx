@@ -9,14 +9,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
 
-import miniatus from './species/miniatus';
-import prasinus from './species/prasinus';
-import albus from './species/albus'
-import tuberculata from './species/tuberculata'
-import nereis from './species/nereis'
-import chaetopterus from './species/chaetopterus';
+import * as Tone from 'tone'
 
-import Chart from 'chart.js/auto';
+import pteron from './species/pteron'
+import chaetopterus from './species/chaetopterus';
+import polyphemus from './species/polyphemus';
+import miniatus from './species/miniatus';
+import nereis from './species/nereis'
+import prasinus from './species/prasinus';
+import tuberculata from './species/tuberculata'
+
+import Chart, { PointElement } from 'chart.js/auto';
 
 
 
@@ -25,183 +28,147 @@ interface limulus_args {
 	scene: THREE.Scene | undefined
 	info_log: React.Dispatch<React.SetStateAction<string>>
 	canvas_container: React.MutableRefObject<HTMLDivElement> | undefined
+	models: { [name: string]: THREE.Group } | undefined
+	player: { player: Tone.Player, distortion: Tone.Distortion } | undefined
 }
-
 
 export interface callback_species_args {
 	scene: THREE.Scene
 	limulus: THREE.Group
-	morph: (t: number) => any
-
+	hyperparams: number[]
+	player: { player: Tone.Player, distortion: Tone.Distortion }
 }
 
-export interface limulus_species_prototype {
-	name: string
-	callback: (loader: GLTFLoader, scene: THREE.Scene, hyperparams: number[]) => Promise<callback_species_args>
-}
 
-const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, scene }) => {
+const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, scene, models, player }) => {
 	const navigate = useNavigate()
 
 	const { seed } = useParams()
 	const rand = React.useRef(new Rand(''))
 
-	const [limulus_specie, set_limulus_species] = React.useState<limulus_species_prototype>()
+	const hyperparams_chart = React.useRef() as React.MutableRefObject<HTMLCanvasElement>;
+
+	const [limulus_specie, set_limulus_species] = React.useState<string>()
 	const [ttl, set_ttl] = React.useState(0)
 	const [life_countdown, set_life_countdown] = React.useState(0)
 	const life_countdown_id = React.useRef<ReturnType<typeof setInterval>>()
 	const [hyperparams, set_hyperparams] = React.useState<number[]>()
 
+	const [morph, set_morph] = React.useState<(t:number)=>void>()
+
 	const blur_fx = React.useRef()
 
-	const limulus_species_prototypes: limulus_species_prototype[] = [
+	const limulus_species_prototypes: { [name: string]: (args: callback_species_args) => ((t: number) => void) } = {
 		/*
-		{
-			name:'Pteron',
-			callback: albus
-
-		},
-		
-		{
-			name: 'Tuberculata',
-			callback: tuberculata
-		},
-		
-		{
-			name: 'Nereis',
-			callback: nereis
-		},
-		{
-			name: 'Miniatus',
-			callback: miniatus
-		},
-		{
-			name: 'Prasinus',
-			callback: prasinus
-		},*/
-		{
-			name: 'Chaetopterus',
-			callback: chaetopterus
-		}
-	]
+		'pteron': pteron,
+		'chaetopterus': chaetopterus,
+		'polyphemus': polyphemus,
+		"miniatus": miniatus,
+		"nereis": nereis,*/
+		"prasinus": prasinus,/*
+		"tuberculata": tuberculata*/
+	}
 
 	React.useEffect(() => {
-		if (!hyperparams) return
-		if (!seed) return
-		if (!scene) return
-		if (!canvas_container) return
+		if (!models || !scene) return
+
+		scene.getObjectByName("ewaste")?.traverse((m) => m.visible = true)
+
+		Object.values(models).forEach((model: THREE.Group) => {
+			model.visible = false
+			window.limulus = model
+
+		})
+
+	}, [models, scene])
+
+	React.useEffect(() => {
+		if (!hyperparams || !player) return
+		/*
+				const ctx = hyperparams_chart.current.getContext("2d")!
+				new Chart(ctx, {
+					type: "bar",
+					options: {
+						indexAxis: 'y',
+						animation: false,
+						scales:{
+							y:{
+								display:false,
+							},
+							x:{
+								display:false,
+							},
+		
+						},
+						plugins:{
+							legend:{
+								display:false
+							}
+						}
+					},
+					data: {
+						labels: hyperparams.map((x, i) => `h${i}`),
+						datasets: [
+							{
+								barPercentage:0.99,
+								categoryPercentage:1,
+								label: 'miau',
+								data: hyperparams
+							}
+						],
+					},
+		
+		
+				})
+		*/
+		console.debug(player, 'player')
+	}, [hyperparams, player])
+
+	React.useEffect(() => {
+		if (!hyperparams || ttl == 0 || !models || !scene || !player) return
 
 		set_limulus_species(() => {
-			const ls = limulus_species_prototypes[
-				Math.floor(rand.current.next() * limulus_species_prototypes.length)
+			const ls = Object.keys(limulus_species_prototypes)[
+				Math.floor(rand.current.next() * Object.keys(limulus_species_prototypes).length)
 			]
 
-			const gltf_loader = new GLTFLoader();
+			models[ls].visible = true
 
-			const dracoLoader = new DRACOLoader();
-			dracoLoader.setDecoderPath('/js/');
-			gltf_loader.setDRACOLoader(dracoLoader);
+			const morph = limulus_species_prototypes[ls]({ scene: scene, hyperparams: hyperparams, limulus: models[ls], player: player })
 
-			ls.callback(gltf_loader, scene, hyperparams)
-				.then((args: callback_species_args) => {
+			set_morph(()=>morph)
 
-					// wait till limulus is loaded to start countdown
-					const now = new Date()
-					const now_sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+			const waste_scene = scene.getObjectByName('ewaste')!
+			for (let i = 0; i < 6; i++) {
+				const ewaste = waste_scene.getObjectByName(`ewaste-${i + 1}`)!
 
-					set_ttl(() => {
-						const t = Math.floor(rand.current.next() * 20)
-
-						if (localStorage.getItem(seed) == null) {
-							localStorage.setItem(seed, `${now_sec}`)
-							set_life_countdown(() => t)
-
-
-						} else {
-							const start = JSON.parse(localStorage.getItem(seed) || `${now_sec}`)
-
-							if (now_sec - start >= t) {
-								// limulus is already dead, redirect to create another
-
-								setTimeout(function () {
-									localStorage.removeItem(seed)
-									clearInterval(life_countdown_id.current)
-									navigate('/')
-								}, 2000)
-								return t
-							} else {
-								set_life_countdown(() => t - (now_sec - start))
-							}
-						}
-
-						life_countdown_id.current = setInterval(function () {
-							set_life_countdown((l) => {
-								if (l <= 0) {
-									localStorage.removeItem(seed)
-									clearInterval(life_countdown_id.current)
-									setTimeout(function () {
-										navigate('/')
-									}, 2000)
-									return 0
-								}
-								return l - 1
-							})
-						}, 1000)
-
-						return t
-					})
-					/// add model to scene uwu
-					args.limulus.name = 'limulus'
-
-					move_legs(args)
-
-					gltf_loader.load('models/ewaste.glb', function (glb) {
-						const waste_scene = glb.scene
-
-						for (let i = 0; i < 6; i++) {
-							const ewaste = waste_scene.getObjectByName(`ewaste-${i + 1}`)!
-
-							if (rand.current.next() >= 0.5) {
-								ewaste.visible = false
-							}
-						}
-						args.limulus.add(waste_scene)
-						scene.add(args.limulus)
-					})
-				})
+				if (rand.current.next() >= 0.5) {
+					ewaste.visible = true
+				}
+			}
 
 			return ls
 		})
 
 		return () => {
-			if (scene) {
-				console.debug("removing child", scene)
-				const limulus = scene.getObjectByName('limulus')! as THREE.Group
-				limulus.traverse((obj) => {
-					if ((obj as THREE.Mesh).isMesh) {
-						// removes material
+			scene.getObjectByName("ewaste")?.traverse((m) => m.visible = false)
 
-						((obj as THREE.Mesh).material as THREE.MeshStandardMaterial).map?.dispose();
-						((obj as THREE.Mesh).material as THREE.MeshStandardMaterial).dispose();
-						((obj as THREE.Mesh).geometry as THREE.BufferGeometry).dispose();
-
-						scene.remove(obj)
-					}
-
-				})
-				scene.remove(limulus)
-
-			}
-
-			if (canvas_container) {
-				canvas_container.current.style.filter = ''
-			}
+			Object.values(models).forEach((model: THREE.Group) => {
+				model.getObjectByName("box")!.remove()
+				model.visible = false
+			})
 		}
-
-	}, [hyperparams, scene, canvas_container, seed])
+	}, [hyperparams, ttl, models, scene, player])
 
 	React.useEffect(() => {
 
+		if (!life_countdown || !morph) return
+		
+		morph(life_countdown)
+		
+	}, [life_countdown, morph])
+
+	React.useEffect(() => {
 		// gets hyperparams when socket is ready
 
 		if (seed && socket) {
@@ -212,6 +179,54 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 
 				set_hyperparams(params)
 
+				const now = new Date()
+				const now_sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+
+				// set time to live
+				set_ttl(() => {
+					const t = Math.floor(rand.current.next() * 20)
+
+					// gets start time from local Storage
+					if (localStorage.getItem(seed) == null) {
+						localStorage.setItem(seed, `${now_sec}`)
+						set_life_countdown(() => t)
+					} else {
+						const start = JSON.parse(localStorage.getItem(seed) || `${now_sec}`)
+
+						if (now_sec - start >= t) {
+							// limulus is already dead, redirect to create another
+
+							setTimeout(function () {
+								localStorage.removeItem(seed)
+								clearInterval(life_countdown_id.current)
+								navigate('/')
+							}, 2000)
+
+							return t
+						} else {
+							set_life_countdown(() => t - (now_sec - start))
+						}
+					}
+
+					// one sec interval for life
+					life_countdown_id.current = setInterval(function () {
+						set_life_countdown((l) => {
+							if (l <= 0) {
+								localStorage.removeItem(seed)
+								clearInterval(life_countdown_id.current)
+
+								setTimeout(function () {
+									navigate('/')
+								}, 2000)
+								return 0
+							}
+							return l - 1
+						})
+					}, 1000)
+
+					return t
+				})
+
 				info_log(JSON.stringify(params))
 			})
 		}
@@ -220,19 +235,12 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 			if (life_countdown_id.current) {
 				clearInterval(life_countdown_id.current)
 			}
-
-			// stop all animation
-			TWEEN.getAll().forEach((mov: TWEEN.Tween<Record<string, any>>) => {
-				mov.stop()
-				mov.stopChainedTweens()
-			})
-
 		}
 	}, [seed, socket]);
 
 	React.useEffect(() => {
+		// blurry canvas 
 		if (!canvas_container || life_countdown == 0) return
-
 
 		if (canvas_container.current.style.filter == '') {
 			console.debug(life_countdown)
@@ -250,7 +258,7 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 	return (
 		<>
 			<div id="ui">
-				<div id="label">Limulus {limulus_specie ? limulus_specie.name : ''}</div>
+				<div id="label">Limulus {limulus_specie}</div>
 
 				<div id="props">
 					<div>semilla</div>
@@ -258,9 +266,21 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 
 					<div>tiempo de vida</div>
 					<div>{life_countdown} /  {ttl}</div>
-
-					<div>Hiperparámetros</div>
-					<div></div>
+					<div>parametros</div>
+					<div>[{
+						hyperparams?.map((param: number) => `${param}`.match(/^-?\d+(?:\.\d{0,3})?/)![0]).join(", ")
+					}]
+					</div>
+					{
+						(hyperparams ? hyperparams : []).map(((param: number, i: number) => {
+							return (
+								<>
+									<div>param-{i}</div>
+									<div>{`${param}`.match(/^-?\d+(?:\.\d{0,2})?/)![0]}</div>
+								</>
+							)
+						}))
+					}
 				</div>
 
 			</div>
@@ -269,180 +289,3 @@ const Limulus: React.FC<limulus_args> = ({ canvas_container, socket, info_log, s
 }
 
 export default Limulus
-
-
-function move_legs({ limulus, scene }: { limulus: THREE.Group; scene: THREE.Scene }) {
-
-	const box = new THREE.BoxHelper(limulus, 0xffff00);
-	limulus.add(box);
-	/*
-	const edges_group = new THREE.Group()
-	limulus.traverse((obj)=>{
-		if(!(obj as THREE.Mesh).isMesh) return
-
-		const edges = new THREE.EdgesGeometry( (obj as THREE.Mesh).geometry ); 
-		const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial( { color: 0xffffff } ) ); 
-		edges_group.add( line );		
-	})
-
-	limulus.add(edges_group)
-	*/
-	window.limulus = limulus
-
-
-	let pos = {
-		x: limulus.position.x,
-		z: limulus.position.z
-	}
-
-	let legs = {
-		right: [
-			limulus.getObjectByName('pd1')!,
-			limulus.getObjectByName('pd2')!,
-			limulus.getObjectByName('pd3')!,
-			limulus.getObjectByName('pd4')!
-		],
-		left: [
-			limulus.getObjectByName('pi1')!,
-			limulus.getObjectByName('pi2')!,
-			limulus.getObjectByName('pi3')!,
-			limulus.getObjectByName('pi4')!
-		]
-	}
-
-
-
-	let circle_mov = new TWEEN.Tween(limulus.rotation)
-		.to({ y: Math.PI * 2 }, 20000)
-		.repeat(Infinity)
-	circle_mov.start()
-
-	let i = 1
-	for (let leg of legs.right) {
-
-		let leg_on = new TWEEN.Tween(leg.rotation)
-			.to({ x: 2.6 }, 1000)
-
-		let leg_back = new TWEEN.Tween(leg.rotation)
-			.to({ x: leg.rotation.x }, 1000)
-			.chain(leg_on)
-
-		// ligament 1
-
-		let lig1_on = new TWEEN.Tween(
-			leg.getObjectByName(`l1d${i}`)!.rotation
-		)
-			.to({ x: -0.5 }, 1000)
-
-		let lig1_back = new TWEEN.Tween(
-			leg.getObjectByName(`l1d${i}`)!.rotation
-		)
-			.to({ x: 0 }, 1000)
-			.chain(lig1_on)
-
-		// ligament 2
-
-
-		let lig2_on = new TWEEN.Tween(
-			leg.getObjectByName(`l2d${i}`)!.rotation
-		)
-			.to({ x: -0.7 }, 1000)
-
-		let lig2_back = new TWEEN.Tween(
-			leg.getObjectByName(`l2d${i}`)!.rotation
-		)
-			.to({ x: 0 }, 1000)
-			.chain(lig2_on)
-
-		// ligament 3
-
-		let lig3_on = new TWEEN.Tween(
-			leg.getObjectByName(`l3d${i}`)!.rotation
-		)
-			.to({ x: -0.8 }, 1000)
-
-		let lig3_back = new TWEEN.Tween(
-			leg.getObjectByName(`l3d${i}`)!.rotation
-		)
-			.to({ x: 0 }, 1000)
-			.chain(lig3_on)
-
-		leg_on.chain(leg_back).start(i * 200)
-		lig1_on.chain(lig1_back).start(100 + i * 200)
-		lig2_on.chain(lig2_back).start(500 + i * 200)
-		lig3_on.chain(lig3_back).start(500 + i * 200)
-
-		i += 1;
-	}
-
-	i = 1
-	for (let leg of legs.left) {
-
-		let leg_on = new TWEEN.Tween(leg.rotation)
-			.to({ x: -2.6 }, 1000)
-
-		let leg_back = new TWEEN.Tween(leg.rotation)
-			.to({ x: leg.rotation.x }, 1000)
-			.chain(leg_on)
-
-		// ligament 1
-
-		let lig1_on = new TWEEN.Tween(
-			leg.getObjectByName(`l1i${i}`)!.rotation
-		)
-			.to({ x: 0.5 }, 1000)
-
-		let lig1_back = new TWEEN.Tween(
-			leg.getObjectByName(`l1i${i}`)!.rotation
-		)
-			.to({ x: 0 }, 1000)
-			.chain(lig1_on)
-
-		// ligament 2
-
-		let lig2_on = new TWEEN.Tween(
-			leg.getObjectByName(`l2i${i}`)!.rotation
-		)
-			.to({ x: 0.7 }, 1000)
-
-		let lig2_back = new TWEEN.Tween(
-			leg.getObjectByName(`l2i${i}`)!.rotation
-		)
-			.to({ x: 0 }, 1000)
-			.chain(lig2_on)
-
-		// ligament 3
-
-		let lig3_on = new TWEEN.Tween(
-			leg.getObjectByName(`l3i${i}`)!.rotation
-		)
-			.to({ x: 0.8 }, 1000)
-
-		let lig3_back = new TWEEN.Tween(
-			leg.getObjectByName(`l3i${i}`)!.rotation
-		)
-			.to({ x: 0 }, 1000)
-			.chain(lig3_on)
-
-		leg_on.chain(leg_back).start(i * 200)
-		lig1_on.chain(lig1_back).start(100 + i * 200)
-		lig2_on.chain(lig2_back).start(500 + i * 200)
-		lig3_on.chain(lig3_back).start(500 + i * 200)
-
-		i += 1;
-	}
-
-	const telson = limulus.getObjectByName('telson-piv')!
-
-	let telson_on = new TWEEN.Tween(telson.rotation)
-		.to({ x: 0.3 }, 10000)
-
-	let telson_back = new TWEEN.Tween(telson.rotation)
-		.to({ x: 0 }, 8000)
-		.chain(telson_on)
-
-	telson_on.chain(telson_back).start()
-
-}
-
-

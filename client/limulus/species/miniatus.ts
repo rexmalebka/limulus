@@ -1,30 +1,15 @@
 import * as THREE from 'three'
-import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
-import type {callback_species_args} from '../index'
+import type { callback_species_args } from '../index'
 
 
-let miniatus = function(loader: GLTFLoader, scene: THREE.Scene ){
-	return new Promise<callback_species_args>(function(res, rej){
+let miniatus: (arg: callback_species_args) => ((t: number) => void) = function ({ scene, limulus, hyperparams }) {
 
-		loader.load('models/miniatus.glb', function(glb){
-			const limulus = glb.scene
-
-			limulus.getObjectByName('exo')!.children.map( (part)=>{
-				;(part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.transparent = true
-				;(part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.opacity = 0.4
-			})
-
-			res({
-				limulus:limulus, 
-				scene:scene,
-				morph: (t:number)=>	{
-					console.debug(scene, t)
-				}			
-			})
-		})
-
+	limulus.getObjectByName('exo')!.children.map((part) => {
+		; (part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.transparent = true
+			; (part as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.opacity = 0.4
 	})
 
+	return (t: number) => { }
 }
 
 export default miniatus
